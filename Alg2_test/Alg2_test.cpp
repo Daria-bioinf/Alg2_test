@@ -1,225 +1,180 @@
 ﻿#include <iostream>
 #include <fstream>
-#include <sstream>
-#include <string>
 #include <vector>
-#include <algorithm>
-#include <set>
+#include <bitset>
 #include <map>
 
 using namespace std;
 
-// Проверка графа на сопряжённость
-bool isGraf(const vector<vector<int>>& G) {
-    int n = G.size();
-    for (int x = 0; x < n; x++) {
-        for (int y = x + 1; y < n; y++) {
-            bool intersect = false;
-            for (int a : G[x]) {
-                for (int b : G[y]) {
-                    if (a == b) { intersect = true; break; }
-                }
-                if (intersect) break;
-            }
-            if (intersect) {
-                if (G[x].size() != G[y].size()) return false;
-                for (int a : G[x]) {
-                    bool found = false;
-                    for (int b : G[y]) {
-                        if (a == b) { found = true; break; }
-                    }
-                    if (!found) return false;
-                }
-            }
-        }
-    }
-    return true;
-}
+const int MAXN = 20;
 
-// Проверка графа на линейность
-bool isLinear(const vector<vector<int>>& G) {
-    int n = G.size();
-    vector<vector<int>> rev(n);
-    for (int u = 0; u < n; u++) {
-        for (int v : G[u]) rev[v].push_back(u);
-    }
-    vector<vector<int>> sortedG = G;
-    for (int i = 0; i < n; i++) {
-        sort(sortedG[i].begin(), sortedG[i].end());
-        sort(rev[i].begin(), rev[i].end());
-    }
-    for (int x = 0; x < n; x++) {
-        for (int y = x + 1; y < n; y++) {
-            if (sortedG[x] == sortedG[y] && rev[x] == rev[y]) return false;
-        }
-    }
-    return true;
-}
+// --------------------------------------
+// Простейшая структура DSU (без оптимизаций)
+// --------------------------------------
+struct DSU {
+    vector<int> parent;
 
-// union-find (DSU)
-int findRoot(vector<int>& parent, int x) {
-    if (parent[x] == x) return x;
-    parent[x] = findRoot(parent, parent[x]);
-    return parent[x];
-}
-void unite(vector<int>& parent, int a, int b) {
-    a = findRoot(parent, a);
-    b = findRoot(parent, b);
-    if (a != b) parent[b] = a;
-}
-
-// Построение H из сопряжённого G по описанному в задании способу.
-// Возвращает список дуг H (после переиндексации вершин в компактный диапазон 0..k-1).
-vector<pair<int, int>> buildH_from_G(const vector<vector<int>>& G) {
-    int n = G.size();
-    // H0: для каждой вершины i в G создаём дугу (2*i, 2*i+1)
-    int total = 2 * n;
-    // parent для union-find по вершинам H0 (0..total-1)
-    vector<int> parent(total);
-    for (int i = 0; i < total; ++i) parent[i] = i;
-
-    // Для каждой дуги u->v в G: склеиваем конец дуги u (2*u+1) и начало дуги v (2*v)
-    for (int u = 0; u < n; ++u) {
-        for (int v : G[u]) {
-            int a = 2 * u + 1;
-            int b = 2 * v;
-            // safety check (на случай некорректных номеров)
-            if (a < 0 || a >= total || b < 0 || b >= total) continue;
-            unite(parent, a, b);
-        }
+    DSU(int n = 0) {
+        parent.resize(n);
+        for (int i = 0; i < n; i++) parent[i] = i;
     }
 
-    // Найдём репрезентанты (и переиндексируем их компактно)
-    map<int, int> remap; // rep -> new index
-    int nextIdx = 0;
-    for (int i = 0; i < total; ++i) {
-        int r = findRoot(parent, i);
-        if (remap.find(r) == remap.end()) {
-            remap[r] = nextIdx++;
-        }
+    int find(int x) {
+        if (parent[x] == x) return x;
+        parent[x] = find(parent[x]);
+        return parent[x];
     }
 
-    // Собираем дуги H: для каждой исходной дуги (2*i, 2*i+1) добавляем (rep(2*i), rep(2*i+1))
-    // затем переиндексы по remap
-    set<pair<int, int>> edgesSet; // используем set, чтобы не дублировать одинаковые дуги при выводе
-    vector<pair<int, int>> edgesList; // если нужно оставить дубликаты — можно заполнять этот вектор
-
-    for (int i = 0; i < n; ++i) {
-        int a_rep = findRoot(parent, 2 * i);
-        int b_rep = findRoot(parent, 2 * i + 1);
-        int a = remap[a_rep];
-        int b = remap[b_rep];
-        // Если a == b — петля; по желанию можно её включать или не включать.
-        // Я включаю только ненулевые дуги (a != b), как в примере задания.
-        if (a != b) edgesSet.insert(make_pair(a, b));
+    void unite(int a, int b) {
+        int pa = find(a);
+        int pb = find(b);
+        if (pa != pb) parent[pb] = pa;
     }
+};
 
-    // Перенесём из set в вектор (чтобы вернуть)
-    for (auto it = edgesSet.begin(); it != edgesSet.end(); ++it) {
-        edgesList.push_back(*it);
-    }
+int main()
+{
+    string inputFile, outputFile;
+    cout << "Input file: ";
+    cin >> inputFile;
 
-    return edgesList;
-}
+    cout << "Output file: ";
+    cin >> outputFile;
 
-int main() {
-    ifstream fin("inp_sprze.txt"); // поменяй имя файла при необходимости
-    if (!fin.is_open()) {
-        cout << "Error: Cannot open file input4.txt\n";
+    ifstream in(inputFile);
+    if (!in) {
+        cout << "Cannot open input file.\n";
         return 1;
     }
 
-    string line;
     int n, m;
+    in >> n >> m;
 
-    // читаем заголовок
-    if (!getline(fin, line)) {
-        cout << "Error: empty input\n";
-        return 1;
-    }
-    stringstream hdr(line);
-    hdr >> n >> m;
-    if (!hdr) {
-        cout << "Error: invalid header\n";
-        return 1;
-    }
+    vector<pair<int, int>> edgesG;
+    edgesG.reserve(m);
 
-    // создаём G размером n (вершины 0..n-1)
-    vector<vector<int>> G(n);
-    int readEdges = 0;
-    while (getline(fin, line)) {
-        if (line.empty()) continue;
-        stringstream ss(line);
+    for (int i = 0; i < m; i++) {
         int u, v;
-        if (!(ss >> u >> v)) continue;
-        if (u < 0 || u >= n || v < 0 || v >= n) {
-            cout << "Error: Arc " << u << "->" << v << " uses vertex outside range 0.." << n - 1 << "\n";
-            return 1;
+        in >> u >> v;
+        edgesG.push_back({ u - 1, v - 1 }); // to 0-based
+    }
+    in.close();
+
+    // --------------------------------------
+    // 1) Проверка 1-графа
+    // --------------------------------------
+    bool oneGraph = true;
+    bool hasEdge[MAXN][MAXN] = { false };
+    vector< bitset<MAXN> > Nplus(n);
+
+    for (auto e : edgesG) {
+        int u = e.first;
+        int v = e.second;
+        if (hasEdge[u][v]) oneGraph = false;
+        hasEdge[u][v] = true;
+        Nplus[u].set(v);
+    }
+
+    cout << (oneGraph ? "G is 1-graph\n" : "G is NOT 1-graph\n");
+
+    // --------------------------------------
+    // 2) Проверка графа сопряжённого
+    // --------------------------------------
+    bool adjoint = oneGraph;
+
+    if (adjoint) {
+        for (int x = 0; x < n; x++) {
+            for (int y = x + 1; y < n; y++) {
+                bitset<MAXN> inter = (Nplus[x] & Nplus[y]);
+                if (inter.any() && Nplus[x] != Nplus[y]) {
+                    adjoint = false;
+                    break;
+                }
+            }
+            if (!adjoint) break;
         }
-        G[u].push_back(v);
-        ++readEdges;
-    }
-    fin.close();
-
-    // отладочный вывод
-    cout << "Vertices = " << n << " Arcs(header) = " << m << " Arcs(read) = " << readEdges << "\n";
-    cout << "List of arcs:\n";
-    for (int i = 0; i < n; ++i) {
-        cout << i << " -> ";
-        for (size_t j = 0; j < G[i].size(); ++j) cout << G[i][j] << (j + 1 < G[i].size() ? " " : "");
-        cout << "\n";
     }
 
-    // проверка сопряжённости
-    bool conj = isGraf(G);
-    cout << (conj ? "Graf jest sprzezony.\n" : "Graf NIE jest sprzezony.\n");
-    if (!conj) return 0;
-
-    // проверка линейности
-    bool lin = isLinear(G);
-    cout << (lin ? "Graf jest liniowy.\n" : "Graf NIE jest liniowy.\n");
-
-    // строим H
-    vector<pair<int, int>> H = buildH_from_G(G);
-
-    // вывод H в отладку
-    cout << "Computed H (edges):\n";
-    for (size_t i = 0; i < H.size(); ++i) {
-        cout << H[i].first << " " << H[i].second << "\n";
+    if (!adjoint) {
+        cout << "G is NOT adjoint graph.\n";
+        return 0;
     }
 
-    // запись в output.txt — формат: num_vertices num_edges
-    // нужно знать количество вершин в H: это количество уникальных репрезентантов, которое
-    // равно максим индексу в ребрах + 1 (если мы использовали compact remap это nextIdx)
-    int numVerticesH = 0;
-    int numEdgesH = (int)H.size();
-    if (numEdgesH > 0) {
-        int maxv = 0;
-        for (size_t i = 0; i < H.size(); ++i) {
-            maxv = max(maxv, H[i].first);
-            maxv = max(maxv, H[i].second);
+    cout << "G is adjoint graph.\n";
+
+    // --------------------------------------
+    // 3) Восстановление H
+    // --------------------------------------
+    int Hn = 2 * n;
+    DSU dsu(Hn);
+
+    auto tailId = [](int i) { return 2 * i; };
+    auto headId = [](int i) { return 2 * i + 1; };
+
+    for (auto e : edgesG) {
+        int x = e.first;
+        int y = e.second;
+        dsu.unite(headId(x), tailId(y));
+    }
+
+    vector<pair<int, int>> edgesH;
+    edgesH.reserve(n);
+
+    for (int i = 0; i < n; i++) {
+        int u = dsu.find(tailId(i));
+        int v = dsu.find(headId(i));
+        edgesH.push_back({ u, v });
+    }
+
+    // --------------------------------------
+    // 4) Проверка линейности: нет кратных дуг в H
+    // --------------------------------------
+    bool lineGraph = true;
+    map<int, int> compress;
+    int idx = 0;
+
+    for (auto& e : edgesH) {
+        if (!compress.count(e.first)) compress[e.first] = idx++;
+        if (!compress.count(e.second)) compress[e.second] = idx++;
+    }
+
+    int K = idx;
+    vector<vector<bool>> seen(K, vector<bool>(K, false));
+
+    for (auto& e : edgesH) {
+        int u = compress[e.first];
+        int v = compress[e.second];
+        if (seen[u][v]) {
+            lineGraph = false;
+            break;
         }
-        numVerticesH = maxv + 1;
-    }
-    else {
-        // если нет дуг — всё равно можно записать 0 вершин или 0 дуг;
-        // по смыслу лучше записать количество компонент (можно 0)
-        numVerticesH = 0;
+        seen[u][v] = true;
     }
 
-    ofstream fout("output_beta.txt");
-    if (!fout.is_open()) {
-        cout << "Error: cannot open output.txt for writing\n";
-        return 1;
+    if (lineGraph)
+        cout << "G is ALSO line graph.\n";
+    else
+        cout << "G is NOT line graph.\n";
+
+    // --------------------------------------
+    // 5) Запись H в файл
+    // --------------------------------------
+    vector<pair<int, int>> edgesHref;
+
+    for (auto& e : edgesH) {
+        int u = compress[e.first] + 1;
+        int v = compress[e.second] + 1;
+        edgesHref.push_back({ u, v });
     }
 
-    fout << numVerticesH << " " << numEdgesH << "\n";
-    for (size_t i = 0; i < H.size(); ++i) {
-        fout << H[i].first << " " << H[i].second << "\n";
-    }
-    fout.close();
+    ofstream out(outputFile);
+    out << K << " " << edgesHref.size() << "\n";
+    for (auto& e : edgesHref)
+        out << e.first << " " << e.second << "\n";
+    out.close();
 
-    cout << "Graf H zapisano do output.txt\n";
+    cout << "Graph H written to file.\n";
+
     return 0;
 }
 
